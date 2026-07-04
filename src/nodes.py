@@ -7,6 +7,8 @@ from langchain_classic.chains.combine_documents import create_stuff_documents_ch
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
+from state import GraphStateNode
+from langchain_core.document_loaders import WebBaseLoader
 
 load_dotenv()
 
@@ -76,24 +78,43 @@ def rag_retrieval_chain(query: str) -> str:
     # for doc in result["context"]:
     #     print("-", doc.metadata.get("source"))
 
-# print(rag_retrieval_chain("I feel like I have no time for myself and my family. How can I reclaim my time and build better habits?"))
 
 from langchain_tavily import TavilySearch
 
-tavily_search = TavilySearch(
-    max_results=5,
-    topic="general",
-    # include_answer=False,
-    # include_raw_content=False,
-    # include_images=False,
-    # include_image_descriptions=False,
-    # search_depth="basic",
-    # time_range="day",
-    include_domains=None,
-    # exclude_domains=None
-)
-question = "I feel like I have no time for myself and my family. How can I reclaim my time and build better habits?"
-search_results = tavily_search.invoke(question)
-print("Search Results:", search_results)
-for result in search_results.get("results", []):
-    print(f"- {result.get('title')}: {result.get('url')}")
+def web_search_node(state: GraphStateNode) -> GraphStateNode:
+    """Searches the web for information, then scrapes the content from the resulting URLs."""
+    print("--- Calling Web Search Node ---")
+    question = state["question"]
+
+    tavily_search = TavilySearch(
+        max_results=2,
+        search_depth="advanced",
+        include_domains=["who.int"]
+    )
+    search_results = tavily_search.invoke(question)
+
+    scraped_docs = []
+    if not search_results or "results" not in search_results:
+        print("No search results found.")
+        return {"documents": [], "sender": "web_search_node"}
+
+    urls = [result.get("url") for result in search_results["results"] if result.get("url")]
+    print(f"Found URLs: {urls}")
+
+    if not urls:
+        print("No valid URLs in search results.")
+        return {"documents": [], "sender": "web_search_node"}
+
+    for url in urls:
+        try:
+            print(f"Scraping {url}...")
+            loader = WebBaseLoader(url)
+            docs = loader.load()
+            for doc in docs:
+                doc.metadata["source"] = url
+            scraped_docs.extend(docs)
+        except Exception as e:
+            print(f"Error scraping {url}: {e}")
+
+    print(f"Scraped {len(scraped_docs)} documents.")
+    return {"documents": scraped_docs, "sender": "web_search_node"}
