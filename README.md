@@ -6,7 +6,7 @@
 
 ## 🎬 Demo
 
-<img src="assets/demo.gif" width="100%" alt="Time & Lifestyle Agent Demo" />
+![Time & Lifestyle Agent Demo](./assets/demo.gif)
 
 ---
 
